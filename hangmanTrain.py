@@ -106,6 +106,16 @@ class HangmanAPI(object):
         self.current_dictionary = []
 
         self.clf = []
+
+        self.max_data_length = 10e6     # max samples of generated data
+        self.num_passes = 3            # iterations over training dictionary
+        self.max_length = 60            # max length for vectorized input
+        self.batch_size = 32
+        self.error_rate = 0.35          # guess an incorrect letter with probability=error_rate
+        self.vocab_size = 29            # Transformer and Positional Embedding params
+        self.embed_dim = 128
+        self.num_heads = 2
+        self.dense_dim = 16
         
     @staticmethod
     def determine_hangman_url():
@@ -335,18 +345,15 @@ class HangmanAPI(object):
             raise HangmanAPIError(result)
         return result
     
-    def generate_dataset(self, dict, random_forest=0):
-        error_rate = 0.35
-        batch_size = 32
-        max_length = 60
+    def generate_dataset(self, dict):
+        inputs = np.zeros((int(self.max_data_length), self.max_length), dtype="int32")
+        targets = np.zeros((int(self.max_data_length), 26), dtype="int32")
 
-        inputs = np.zeros((10000000, max_length), dtype="uint16")
-        targets = np.zeros((10000000, 26), dtype="uint16")
         counter = 0
-
-        num_passes = 1
-        for i in range(num_passes):
+        est = 0
+        for i in range(self.num_passes):
             for solution in dict:
+                est += 1
                 solution_partial = solution
                 word = '_' * len(solution)
                 word_aug = word + ' '
@@ -367,11 +374,11 @@ class HangmanAPI(object):
                         ind = ord(letter) - 97
                         targets[counter, ind] = 1
                     counter += 1
-                    if counter % 10000 == 0:
-                        print(counter)
+                    if counter % 100000 == 0:
+                        print('{} / {} (estimated)'.format(counter, int(counter / est * len(dict) * self.num_passes)))
 
                     # try to mess up a guess with probability = error_rate
-                    if np.random.uniform(low=0, high=1) < error_rate:
+                    if np.random.uniform(low=0, high=1) < self.error_rate:
                         r = random.randrange(26)
                         letter = chr(ord('a') + r)
                         if letter not in solution and letter not in word_aug:
@@ -399,21 +406,14 @@ class HangmanAPI(object):
 
                     word_aug += letter
 
-        max_ind = np.floor(counter / batch_size)
-        inputs = tf.convert_to_tensor(inputs[:int(max_ind * batch_size), :], dtype=tf.int32)
-        targets = tf.convert_to_tensor(targets[:int(max_ind * batch_size), :], dtype=tf.int32)
+        max_ind = np.floor(counter / self.batch_size)
+        inputs = tf.convert_to_tensor(inputs[:int(max_ind * self.batch_size), :], dtype=tf.int32)
+        targets = tf.convert_to_tensor(targets[:int(max_ind * self.batch_size), :], dtype=tf.int32)
 
         dataset = tf.data.Dataset.from_tensor_slices((inputs, targets))
-        int_train_ds = dataset.batch(batch_size)
+        int_train_ds = dataset.batch(self.batch_size)
 
-        dataset = dataset.cache('/home/gabe/Desktop/GabeDesktop/trexquant')
-
-        if (random_forest):
-            self.clf = RandomForestClassifier(max_depth=2, random_state=0, verbose=10, n_estimators=30)
-            self.clf.fit(inputs, targets)
-            #self.clf.predict_log_proba(inputs[6, :])
-
-        return 0
+        return int_train_ds
     
 class HangmanAPIError(Exception):
     def __init__(self, result):
@@ -448,22 +448,14 @@ train = np.random.choice(partition, int(len(partition) * 0.8 / 0.9), replace=Fal
 val = np.setdiff1d(api.full_dictionary, partition)
 test = np.setdiff1d(partition, train)
 
-max_length = 60
-
-vocab_size = 29
-sequence_length = max_length
-embed_dim = 128
-num_heads = 2
-dense_dim = 16
-
 # Generate datasets
-int_train_ds = api.generate_dataset(train, random_forest=1)
+int_train_ds = api.generate_dataset(train)
 int_val_ds = api.generate_dataset(val)
 int_test_ds = api.generate_dataset(test)
 
 inputs = keras.Input(shape=(None,), dtype="int64")
-x = PositionalEmbedding(sequence_length, vocab_size, embed_dim)(inputs)
-x = TransformerEncoder(embed_dim, dense_dim, num_heads)(x)
+x = PositionalEmbedding(api.max_length, api.vocab_size, api.embed_dim)(inputs)
+x = TransformerEncoder(api.embed_dim, api.dense_dim, api.num_heads)(x)
 x = layers.GlobalMaxPooling1D()(x)
 x = layers.Dropout(0.5)(x)
 outputs = layers.Dense(26, activation="sigmoid")(x)
