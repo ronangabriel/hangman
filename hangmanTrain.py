@@ -440,7 +440,6 @@ class HangmanAPIError(Exception):
 
         Exception.__init__(self, self.message)
 
-
 api = HangmanAPI(access_token="90bc065bfc8969d9beb0e11915a238", timeout=2000)
 
 partition = np.random.choice(api.full_dictionary, int(len(api.full_dictionary) * 0.9), replace=False)
@@ -464,9 +463,9 @@ model.compile(optimizer="rmsprop", loss="binary_crossentropy", metrics=["accurac
 
 # train the model
 callbacks = [keras.callbacks.ModelCheckpoint("full_transformer_encoder.keras", save_best_only=True)]
-#model.fit(int_train_ds, validation_data=int_val_ds, epochs=10, callbacks=callbacks)
-model = keras.models.load_model("full_transformer_encoder.keras", custom_objects={"TransformerEncoder": TransformerEncoder, "PositionalEmbedding": PositionalEmbedding})
-#print(f"Test acc: {model.evaluate(int_test_ds)[1]:.3f}")
+model.fit(int_train_ds, validation_data=int_val_ds, epochs=1, callbacks=callbacks)
+#model = keras.models.load_model("full_transformer_encoder.keras", custom_objects={"TransformerEncoder": TransformerEncoder, "PositionalEmbedding": PositionalEmbedding})
+print(f"Test acc: {model.evaluate(int_test_ds)[1]:.3f}")
 
 count = 0
 wins = 0
