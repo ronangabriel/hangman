@@ -108,7 +108,7 @@ class HangmanAPI(object):
         self.clf = []
 
         self.max_data_length = 10e6     # max samples of generated data
-        self.num_passes = 3            # iterations over training dictionary
+        self.num_passes = 1          # iterations over training dictionary
         self.max_length = 60            # max length for vectorized input
         self.batch_size = 32
         self.error_rate = 0.35          # guess an incorrect letter with probability=error_rate
@@ -175,8 +175,8 @@ class HangmanAPI(object):
 
         input = tf.convert_to_tensor(input, dtype=tf.int32)
 
-        #output = model.predict(input)
-        output = np.squeeze(np.array(self.clf.predict_proba(input)))[:, 1]
+        output = model.predict(input)
+        #output = np.squeeze(np.array(self.clf.predict_proba(input)))[:, 1]
 
         
 
@@ -186,7 +186,7 @@ class HangmanAPI(object):
             guess_letter = chr(ord('a') + ind)
 
             if guess_letter in self.guessed_letters:
-                output[ind] = 0
+                output[0, ind] = 0
             else:
                 break
 
@@ -463,7 +463,7 @@ model.compile(optimizer="rmsprop", loss="binary_crossentropy", metrics=["accurac
 
 # train the model
 callbacks = [keras.callbacks.ModelCheckpoint("full_transformer_encoder.keras", save_best_only=True)]
-model.fit(int_train_ds, validation_data=int_val_ds, epochs=1, callbacks=callbacks)
+model.fit(int_train_ds, validation_data=int_val_ds, epochs=10, callbacks=callbacks)
 #model = keras.models.load_model("full_transformer_encoder.keras", custom_objects={"TransformerEncoder": TransformerEncoder, "PositionalEmbedding": PositionalEmbedding})
 print(f"Test acc: {model.evaluate(int_test_ds)[1]:.3f}")
 
@@ -475,6 +475,7 @@ for i in range(100):
     count += 1
     print('{} / {}'.format(wins, count))
 
-[total_practice_runs,total_recorded_runs,total_recorded_successes,total_practice_successes] = api.my_status() # Get my game stats: (# of tries, # of wins)
-practice_success_rate = total_practice_successes / total_practice_runs
-print('run %d practice games out of an allotted 100,000. practice success rate so far = %.3f' % (total_practice_runs, practice_success_rate))
+
+#[total_practice_runs,total_recorded_runs,total_recorded_successes,total_practice_successes] = api.my_status() # Get my game stats: (# of tries, # of wins)
+#practice_success_rate = total_practice_successes / total_practice_runs
+#print('run %d practice games out of an allotted 100,000. practice success rate so far = %.3f' % (total_practice_runs, practice_success_rate))
